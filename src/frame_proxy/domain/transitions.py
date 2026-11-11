@@ -24,6 +24,12 @@ CONTACT_SHEET_TRANSITIONS: dict[str, set[str]] = {
     "failed": set(),
 }
 
+EVIDENCE_PACKAGE_TRANSITIONS: dict[str, set[str]] = {
+    "sealing": {"published", "failed"},
+    "published": set(),
+    "failed": set(),
+}
+
 
 def _move(
     record: Any,
@@ -72,3 +78,12 @@ def transition_contact_sheet(
     reason: str | None = None,
 ) -> None:
     _move(record, target, CONTACT_SHEET_TRANSITIONS, reason=reason)
+
+
+def transition_evidence_package(
+    record: Any,
+    target: str,
+    *,
+    reason: str | None = None,
+) -> None:
+    _move(record, target, EVIDENCE_PACKAGE_TRANSITIONS, reason=reason)

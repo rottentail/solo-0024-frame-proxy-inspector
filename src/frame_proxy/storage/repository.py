@@ -12,6 +12,7 @@ from frame_proxy.domain.errors import (
 from frame_proxy.domain.models import (
     ClipRecord,
     ContactSheetRecord,
+    EvidencePackageRecord,
     InspectionRecord,
 )
 from frame_proxy.storage.atomic import atomic_write_bytes, atomic_write_json
@@ -205,5 +206,107 @@ class FileRepository:
                 ErrorCode.CONTACT_SHEET_NOT_FOUND,
                 "contact sheet artifact was not found",
                 details={"sheet_id": sheet_id},
+            )
+
+    def list_contact_sheets_for_inspection(
+        self,
+        inspection_id: str,
+    ) -> list[ContactSheetRecord]:
+        directory = self.paths.contact_sheets
+        records: list[ContactSheetRecord] = []
+        if directory.is_dir():
+            for child in sorted(directory.iterdir()):
+                if not child.is_dir():
+                    continue
+                record_path = self.paths.contact_sheet_record(child.name)
+                if not record_path.is_file():
+                    continue
+                record = ContactSheetRecord.from_dict(self._read_json(record_path))
+                if record.inspection_id == inspection_id:
+                    records.append(record)
+        records.sort(key=lambda item: item.sheet_id)
+        return records
+
+    def create_evidence_package(self, record: EvidencePackageRecord) -> None:
+        path = self.paths.evidence_package_record(record.package_id)
+        with FileKeyLock(
+            self.paths.lock_path("evidence-package", record.package_id)
+        ):
+            if path.exists():
+                raise ConflictError(
+                    "evidence package identifier already exists",
+                    details={"package_id": record.package_id},
+                )
+            atomic_write_json(path, record.as_dict())
+
+    def update_evidence_package(self, record: EvidencePackageRecord) -> None:
+        path = self.paths.evidence_package_record(record.package_id)
+        with FileKeyLock(
+            self.paths.lock_path("evidence-package", record.package_id)
+        ):
+            if not path.exists():
+                raise NotFoundError(
+                    ErrorCode.EVIDENCE_PACKAGE_NOT_FOUND,
+                    "evidence package was not found",
+                    details={"package_id": record.package_id},
+                )
+            atomic_write_json(path, record.as_dict())
+
+    def commit_evidence_package(
+        self,
+        record: EvidencePackageRecord,
+        artifact: bytes,
+    ) -> None:
+        path = self.paths.evidence_package_record(record.package_id)
+        artifact_path = self.paths.evidence_package_artifact(
+            record.package_id,
+            record.artifact_name,
+        )
+        with FileKeyLock(
+            self.paths.lock_path("evidence-package", record.package_id)
+        ):
+            if not path.exists():
+                raise NotFoundError(
+                    ErrorCode.EVIDENCE_PACKAGE_NOT_FOUND,
+                    "evidence package was not found",
+                    details={"package_id": record.package_id},
+                )
+            artifact_visible = False
+            try:
+                atomic_write_bytes(artifact_path, artifact)
+                artifact_visible = True
+                atomic_write_json(path, record.as_dict())
+            except Exception:
+                if artifact_visible:
+                    try:
+                        artifact_path.unlink()
+                    except FileNotFoundError:
+                        pass
+                raise
+
+    def get_evidence_package(self, package_id: str) -> EvidencePackageRecord:
+        path = self.paths.evidence_package_record(package_id)
+        try:
+            return EvidencePackageRecord.from_dict(self._read_json(path))
+        except FileNotFoundError:
+            raise NotFoundError(
+                ErrorCode.EVIDENCE_PACKAGE_NOT_FOUND,
+                "evidence package was not found",
+                details={"package_id": package_id},
+            )
+
+    def get_evidence_package_artifact(
+        self,
+        package_id: str,
+        name: str,
+    ) -> bytes:
+        path = self.paths.evidence_package_artifact(package_id, name)
+        try:
+            return path.read_bytes()
+        except FileNotFoundError:
+            raise NotFoundError(
+                ErrorCode.EVIDENCE_PACKAGE_NOT_FOUND,
+                "evidence package artifact was not found",
+                details={"package_id": package_id},
             )
 

@@ -21,6 +21,10 @@ class DataPaths:
         return self.root / "contact-sheets"
 
     @property
+    def evidence_packages(self) -> Path:
+        return self.root / "evidence-packages"
+
+    @property
     def locks(self) -> Path:
         return self.root / "locks"
 
@@ -45,6 +49,15 @@ class DataPaths:
     def contact_sheet_artifact(self, sheet_id: str, name: str) -> Path:
         return self.contact_sheet_dir(sheet_id) / name
 
+    def evidence_package_dir(self, package_id: str) -> Path:
+        return self.evidence_packages / package_id
+
+    def evidence_package_record(self, package_id: str) -> Path:
+        return self.evidence_package_dir(package_id) / "record.json"
+
+    def evidence_package_artifact(self, package_id: str, name: str) -> Path:
+        return self.evidence_package_dir(package_id) / name
+
     def lock_path(self, kind: str, identifier: str) -> Path:
         return self.locks / f"{kind}-{identifier}.lock"
 
@@ -54,6 +67,7 @@ class DataPaths:
             self.clips,
             self.inspections,
             self.contact_sheets,
+            self.evidence_packages,
             self.locks,
         ):
             path.mkdir(parents=True, exist_ok=True)

@@ -101,6 +101,25 @@
         "service",
         "storage"
       ]
+    },
+    {
+      "id": "publish-evidence-package",
+      "name": "Publish evidence package",
+      "entry": "POST /v1/inspections/{inspection_id}/evidence-packages",
+      "steps": [
+        "resolve the indexed inspection and its permitted ready sheets",
+        "re-verify stored clip and sheet digests before sealing",
+        "render a deterministic manifest and ZIP and commit them atomically"
+      ],
+      "success": "returns a published package whose manifest and artifact digests are reproducible for the same facts",
+      "failure": "rejects unready or foreign inputs before any record exists and a failed commit leaves no partial package",
+      "verification": "the evidence package smoke path downloads the ZIP, checks every sealed digest and coverage row, republishes identical facts, and races concurrent publishers",
+      "module_ids": [
+        "http",
+        "domain",
+        "service",
+        "storage"
+      ]
     }
   ]
 }

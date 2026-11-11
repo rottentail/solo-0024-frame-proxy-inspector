@@ -11,14 +11,17 @@ from frame_proxy.domain.errors import (
 from frame_proxy.domain.models import (
     ClipRecord,
     ContactSheetRecord,
+    EvidencePackageRecord,
     InspectionRecord,
     SceneRecord,
 )
 from frame_proxy.domain.policies import (
     ContactSheetRequest,
+    EvidencePackageRequest,
     InspectionRequest,
     validate_clip_id,
     validate_contact_sheet_request,
+    validate_evidence_package_request,
     validate_inspection_request,
 )
 
@@ -28,6 +31,8 @@ __all__ = [
     "ConflictError",
     "ContactSheetRecord",
     "ContactSheetRequest",
+    "EvidencePackageRecord",
+    "EvidencePackageRequest",
     "InspectionRecord",
     "InspectionRequest",
     "MediaValidationError",
@@ -37,6 +42,7 @@ __all__ = [
     "ValidationError",
     "validate_clip_id",
     "validate_contact_sheet_request",
+    "validate_evidence_package_request",
     "validate_inspection_request",
 ]
 

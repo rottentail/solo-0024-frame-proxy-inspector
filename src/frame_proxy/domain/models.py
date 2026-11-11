@@ -296,3 +296,75 @@ class ContactSheetRecord:
             updated_at=str(data["updated_at"]),
         )
 
+
+@dataclass(slots=True)
+class EvidencePackageRecord:
+    package_id: str
+    inspection_id: str
+    clip_id: str
+    state: str
+    sheet_ids: list[str]
+    scene_count: int
+    artifact_name: str
+    artifact_digest: str | None
+    artifact_size: int | None
+    manifest_digest: str | None
+    transitions: list[Transition] = field(default_factory=list)
+    error_code: str | None = None
+    error_message: str | None = None
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+
+    def as_dict(self) -> dict[str, Any]:
+        value: dict[str, Any] = {
+            "package_id": self.package_id,
+            "inspection_id": self.inspection_id,
+            "clip_id": self.clip_id,
+            "state": self.state,
+            "sheet_ids": list(self.sheet_ids),
+            "scene_count": self.scene_count,
+            "artifact_name": self.artifact_name,
+            "artifact_digest": self.artifact_digest,
+            "artifact_size": self.artifact_size,
+            "manifest_digest": self.manifest_digest,
+            "transitions": [item.as_dict() for item in self.transitions],
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+        if self.error_code is not None:
+            value["error_code"] = self.error_code
+        if self.error_message is not None:
+            value["error_message"] = self.error_message
+        return value
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EvidencePackageRecord":
+        transitions = [
+            Transition(
+                from_state=str(item.get("from", "")),
+                to_state=str(item.get("to", "")),
+                at=str(item.get("at", "")),
+                reason=item.get("reason"),
+            )
+            for item in data.get("transitions", [])
+            if isinstance(item, dict)
+        ]
+        artifact_size = data.get("artifact_size")
+        return cls(
+            package_id=str(data["package_id"]),
+            inspection_id=str(data["inspection_id"]),
+            clip_id=str(data["clip_id"]),
+            state=str(data["state"]),
+            sheet_ids=[str(value) for value in data.get("sheet_ids", [])],
+            scene_count=int(data["scene_count"]),
+            artifact_name=str(data["artifact_name"]),
+            artifact_digest=data.get("artifact_digest"),
+            artifact_size=int(artifact_size) if artifact_size is not None else None,
+            manifest_digest=data.get("manifest_digest"),
+            transitions=transitions,
+            error_code=data.get("error_code"),
+            error_message=data.get("error_message"),
+            created_at=str(data["created_at"]),
+            updated_at=str(data["updated_at"]),
+        )
+

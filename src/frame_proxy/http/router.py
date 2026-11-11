@@ -8,11 +8,13 @@ from frame_proxy.domain.errors import ApplicationError, ErrorCode, ValidationErr
 from frame_proxy.domain.policies import (
     validate_clip_id,
     validate_contact_sheet_request,
+    validate_evidence_package_request,
     validate_inspection_request,
 )
 from frame_proxy.http.types import ResponseData
 from frame_proxy.service.clips import ClipService
 from frame_proxy.service.contact_sheets import ContactSheetService
+from frame_proxy.service.evidence import EvidencePackageService
 from frame_proxy.service.inspections import InspectionService
 
 
@@ -24,11 +26,13 @@ class RequestRouter:
         clips: ClipService,
         inspections: InspectionService,
         contact_sheets: ContactSheetService,
+        evidence_packages: EvidencePackageService,
     ) -> None:
         self._settings = settings
         self._clips = clips
         self._inspections = inspections
         self._contact_sheets = contact_sheets
+        self._evidence_packages = evidence_packages
 
     def handle(
         self,
@@ -94,6 +98,14 @@ class RequestRouter:
                 request = validate_contact_sheet_request(self._decode_json(body))
                 record = self._contact_sheets.create(inspection_id, request)
                 return ResponseData.json(201, {"contact_sheet": record.as_dict()})
+            if (
+                len(parts) == 4
+                and parts[3] == "evidence-packages"
+                and method == "POST"
+            ):
+                request = validate_evidence_package_request(self._decode_json(body))
+                record = self._evidence_packages.create(inspection_id, request)
+                return ResponseData.json(201, {"evidence_package": record.as_dict()})
 
         if parts[1] == "contact-sheets" and len(parts) >= 3:
             sheet_id = parts[2]
@@ -106,6 +118,19 @@ class RequestRouter:
                     200,
                     payload,
                     "image/x-portable-pixmap",
+                )
+
+        if parts[1] == "evidence-packages" and len(parts) >= 3:
+            package_id = parts[2]
+            if len(parts) == 3 and method == "GET":
+                record = self._evidence_packages.get(package_id)
+                return ResponseData.json(200, {"evidence_package": record.as_dict()})
+            if len(parts) == 4 and parts[3] == "artifact" and method == "GET":
+                payload = self._evidence_packages.get_artifact(package_id)
+                return ResponseData.binary(
+                    200,
+                    payload,
+                    "application/zip",
                 )
 
         return self._not_found(path)

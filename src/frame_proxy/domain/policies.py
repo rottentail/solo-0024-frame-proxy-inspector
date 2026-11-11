@@ -10,6 +10,7 @@ from frame_proxy.domain.errors import ErrorCode, ValidationError
 
 IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{2,47}$")
 HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
+MAX_PACKAGE_SHEET_IDS = 64
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +29,12 @@ class ContactSheetRequest:
     gutter: int
     selection: str
     background_rgb: tuple[int, int, int]
+
+
+@dataclass(frozen=True, slots=True)
+class EvidencePackageRequest:
+    package_id: str
+    sheet_ids: tuple[str, ...] | None
 
 
 def validate_identifier(value: str, field_name: str) -> str:
@@ -132,4 +139,38 @@ def validate_contact_sheet_request(body: Any) -> ContactSheetRequest:
         selection=selection,
         background_rgb=_parse_color(value.get("background", "#20252c")),
     )
+
+
+def validate_evidence_package_request(body: Any) -> EvidencePackageRequest:
+    value = _require_object(body)
+    package_id = validate_identifier(
+        str(value.get("package_id", "")),
+        "package_id",
+    )
+    raw = value.get("sheet_ids")
+    if raw is None:
+        return EvidencePackageRequest(package_id=package_id, sheet_ids=None)
+    if not isinstance(raw, list) or not raw:
+        raise ValidationError(
+            "sheet_ids must be a non-empty array of identifiers",
+            details={"field": "sheet_ids"},
+        )
+    if len(raw) > MAX_PACKAGE_SHEET_IDS:
+        raise ValidationError(
+            "sheet_ids exceeds the evidence package sheet limit",
+            code=ErrorCode.EVIDENCE_PACKAGE_BUDGET,
+            details={"field": "sheet_ids", "max_sheet_ids": MAX_PACKAGE_SHEET_IDS},
+        )
+    sheet_ids: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        identifier = validate_identifier(str(item), "sheet_ids")
+        if identifier in seen:
+            raise ValidationError(
+                "sheet_ids must not contain duplicates",
+                details={"field": "sheet_ids"},
+            )
+        seen.add(identifier)
+        sheet_ids.append(identifier)
+    return EvidencePackageRequest(package_id=package_id, sheet_ids=tuple(sheet_ids))
 

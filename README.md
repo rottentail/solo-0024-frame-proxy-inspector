@@ -1,10 +1,13 @@
 # Frame Proxy Inspector
 
 Frame Proxy Inspector is a small Python backend for turning uncompressed AVI
-footage into two review artifacts:
+footage into three review artifacts:
 
 - a deterministic shot index with contiguous scene ranges;
-- a bounded PPM contact sheet with one tile per indexed scene.
+- a bounded PPM contact sheet with one tile per indexed scene;
+- a frozen evidence package that seals one indexed inspection, its source
+  summary, its ready contact sheets, and the scene-to-tile coverage into a
+  single deterministic ZIP.
 
 The service verifies the RIFF/AVI container, frame geometry, and frame chunk
 count before it admits a clip. Shot indexing then computes luma and color
@@ -55,6 +58,9 @@ The generated file is an uncompressed 24-bit AVI with four color scenes and
 | `POST` | `/v1/inspections/{inspection_id}/contact-sheets` | compose a PPM grid |
 | `GET` | `/v1/contact-sheets/{sheet_id}` | read the tile map and digest |
 | `GET` | `/v1/contact-sheets/{sheet_id}/artifact` | fetch the PPM bytes |
+| `POST` | `/v1/inspections/{inspection_id}/evidence-packages` | seal an inspection into one ZIP |
+| `GET` | `/v1/evidence-packages/{package_id}` | read the package record and digests |
+| `GET` | `/v1/evidence-packages/{package_id}/artifact` | download the sealed ZIP |
 
 Identifiers use lowercase letters, digits, `_`, and `-`, begin with a letter,
 and contain 3 to 48 characters.
@@ -86,6 +92,24 @@ Example contact sheet request:
 `selection` may be `stored`, `midpoint`, or `first`. The rendered PPM is
 binary P6 with a maximum value of 255.
 
+Example evidence package request:
+
+```json
+{
+  "package_id": "pack-demo-a",
+  "sheet_ids": ["sheet-demo-a"]
+}
+```
+
+`sheet_ids` is optional; when omitted, every ready contact sheet of the
+inspection is sealed. The downloaded ZIP holds a `manifest.json` (source
+summary, inspection facts, per-sheet tile maps, scene coverage, and a file
+inventory with SHA-256 digests) plus one PPM per sealed sheet. The manifest
+contains no timestamps or package-local identifiers, so republishing the same
+inspection facts yields an identical `manifest_digest` and `artifact_digest`.
+Stored clip and sheet bytes are re-verified against their records at seal
+time, and a published package is never rewritten by later source changes.
+
 ## Data layout
 
 `FRAME_PROXY_DATA_DIR` selects the data root. Its default is
@@ -100,6 +124,9 @@ binary P6 with a maximum value of 255.
 ├── contact-sheets/<sheet_id>/
 │   ├── record.json
 │   └── sheet.ppm
+├── evidence-packages/<package_id>/
+│   ├── record.json
+│   └── package.zip
 └── locks/
 ```
 
@@ -121,7 +148,8 @@ tools/
 ├── harness.py
 ├── check_clip_intake.py
 ├── check_shot_index.py
-└── check_contact_sheet.py
+├── check_contact_sheet.py
+└── check_evidence_package.py
 ```
 
 ## Build and workflow checks
@@ -138,6 +166,7 @@ Run one workflow check at a time:
 PYTHONPATH=src:. python3 tools/check_clip_intake.py
 PYTHONPATH=src:. python3 tools/check_shot_index.py
 PYTHONPATH=src:. python3 tools/check_contact_sheet.py
+PYTHONPATH=src:. python3 tools/check_evidence_package.py
 ```
 
 Each check starts a real loopback HTTP server, generates media through the

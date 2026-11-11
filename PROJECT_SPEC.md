@@ -93,10 +93,36 @@ State machine:
 `planned -> failed`, `compositing -> failed`. The `ready` and `failed` states
 are terminal.
 
+### Evidence package
+
+An evidence package belongs to one indexed inspection and freezes the
+inspection facts, a source summary of its clip, every permitted (ready)
+contact sheet, and the scene-to-tile coverage relations into one
+deterministic ZIP artifact with a JSON manifest.
+
+Invariants:
+
+- The manifest contains only frozen facts: no wall-clock timestamps and no
+  package-local identifiers, so republishing the same inspection yields an
+  identical manifest digest and artifact digest.
+- Stored clip and contact sheet bytes are re-verified against their recorded
+  digests at seal time; a mismatch aborts publication before any record
+  exists.
+- A published package is never rewritten: later source changes or newly
+  ready contact sheets only affect future packages.
+- A failed or concurrent publication leaves no visible record, artifact, or
+  partial directory.
+
+State machine:
+
+`sealing -> published`, `sealing -> failed`. The `published` and `failed`
+states are terminal.
+
 ## Modules
 
 - `http`: request parsing, identifiers, status mapping, and response encoding.
-- `domain`: entity records, limits, errors, and legal state transitions.
+- `domain`: entity records, limits, errors, deterministic evidence assembly,
+  and legal state transitions.
 - `media`: RIFF/AVI parsing, frame decoding, frame fingerprints, cut detection,
   PPM encoding, and grid composition.
 - `service`: workflow orchestration and observable failure behavior.
@@ -167,6 +193,25 @@ Steps:
 An invalid budget or frame error moves the job to `failed`; temporary bytes are
 removed and no artifact URL becomes available.
 
+### 4. Publish evidence package
+
+Entry point: `POST /v1/inspections/{inspection_id}/evidence-packages`.
+
+Steps:
+
+1. The HTTP boundary validates `package_id` and the optional `sheet_ids`.
+2. The service resolves an `indexed` inspection and its registered clip.
+3. The requested sheets (or every ready sheet of the inspection) are checked
+   for readiness and provenance, then normalized to a stable order.
+4. Stored clip and sheet bytes are re-verified against their recorded digests
+   before anything is sealed.
+5. A deterministic manifest and ZIP are rendered in memory and the package
+   identifier is reserved exclusively.
+6. The artifact and the `published` record are committed atomically.
+
+Any verification or budget failure happens before the record exists; a commit
+failure marks the record `failed` and removes the partial artifact.
+
 ## API surface
 
 - `GET /health`
@@ -177,6 +222,9 @@ removed and no artifact URL becomes available.
 - `POST /v1/inspections/{inspection_id}/contact-sheets`
 - `GET /v1/contact-sheets/{sheet_id}`
 - `GET /v1/contact-sheets/{sheet_id}/artifact`
+- `POST /v1/inspections/{inspection_id}/evidence-packages`
+- `GET /v1/evidence-packages/{package_id}`
+- `GET /v1/evidence-packages/{package_id}/artifact`
 
 Errors are JSON objects with `error.code`, `error.message`, and an optional
 `error.details` object. Validation errors use HTTP 400, missing records use
