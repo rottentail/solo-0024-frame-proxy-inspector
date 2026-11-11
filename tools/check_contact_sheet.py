@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 
+from frame_proxy.media.avi_writer import build_sample_avi
 from frame_proxy.media.ppm import parse_ppm_header
+from frame_proxy.storage.paths import DataPaths
 from tools.harness import RunningService, require, require_status, success
 
 
@@ -69,6 +71,59 @@ def main() -> int:
         )
         missing = service.request("GET", "/v1/contact-sheets/sheet-b")
         require_status(missing, 404, "partial contact sheet visibility")
+
+        # A swapped source with identical geometry must not compose: the
+        # registered clip digest anchors the sheet to the indexed footage.
+        paths = DataPaths(service.data_root)
+        paths.clip_media("clip-sheet-a").write_bytes(
+            build_sample_avi(scene_lengths=(2, 6, 6, 3))
+        )
+        swapped = service.request_json(
+            "POST",
+            "/v1/inspections/inspection-sheet-a/contact-sheets",
+            {
+                "sheet_id": "sheet-c",
+                "columns": 3,
+                "tile_width": 96,
+                "gutter": 4,
+                "selection": "stored",
+                "background": "#20252c",
+            },
+        )
+        require_status(swapped, 422, "swapped source rejection")
+        require(
+            swapped.json()["error"]["code"] == "frame_decode_failed",
+            "swapped source returned the wrong error code",
+        )
+        failed = service.request("GET", "/v1/contact-sheets/sheet-c")
+        require_status(failed, 200, "failed sheet record lookup")
+        failed_record = failed.json()["contact_sheet"]
+        require(
+            failed_record["state"] == "failed",
+            "swapped source sheet did not become failed",
+        )
+        require(
+            failed_record["error_code"] == "frame_decode_failed",
+            "failed sheet lost its stable error code",
+        )
+        require(
+            failed_record["artifact_digest"] is None,
+            "failed sheet must not carry an artifact digest",
+        )
+        blocked = service.request("GET", "/v1/contact-sheets/sheet-c/artifact")
+        require_status(blocked, 409, "failed sheet artifact must not resolve")
+        require(
+            not paths.contact_sheet_artifact("sheet-c", "sheet.ppm").exists(),
+            "failed sheet left an artifact on disk",
+        )
+
+        # The previously committed sheet keeps serving its verified artifact.
+        existing = service.request("GET", "/v1/contact-sheets/sheet-a/artifact")
+        require_status(existing, 200, "existing artifact fetch")
+        require(
+            hashlib.sha256(existing.body).hexdigest() == record["artifact_digest"],
+            "existing artifact changed after the source swap",
+        )
 
     success(
         "create-contact-sheet",

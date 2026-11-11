@@ -69,6 +69,12 @@ class RunningService:
         if self._temporary is not None:
             self._temporary.cleanup()
 
+    @property
+    def data_root(self) -> Path:
+        if self._temporary is None:
+            raise RuntimeError("service is not running")
+        return Path(self._temporary.name).expanduser().resolve()
+
     def request(
         self,
         method: str,

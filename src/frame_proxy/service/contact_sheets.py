@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+
 from frame_proxy.config import Settings
 from frame_proxy.domain.errors import (
     ApplicationError,
     ErrorCode,
+    MediaValidationError,
     StateError,
 )
 from frame_proxy.domain.models import ContactSheetRecord
@@ -66,6 +69,11 @@ class ContactSheetService:
 
         try:
             media = self._repository.get_clip_media(clip.clip_id)
+            if hashlib.sha256(media).hexdigest() != clip.digest:
+                raise MediaValidationError(
+                    "stored clip digest does not match its record",
+                    code=ErrorCode.FRAME_DECODE,
+                )
             descriptor = probe_avi(media)
             frames: dict[int, Frame] = {}
             for scene in inspection.scenes:
